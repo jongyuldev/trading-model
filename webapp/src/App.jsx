@@ -88,9 +88,9 @@ const toCumulative = (rets) => {
   return [1.0, ...rets.map(r => { val *= (1 + r); return val; })];
 };
 
-const EquityChart = ({ data, color }) => {
+const EquityChart = ({ data, color, height = 100 }) => {
   if (!data || data.length < 2) return null;
-  const W = 800, H = 100;
+  const W = 800, H = height;
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 0.01;
@@ -121,6 +121,61 @@ const EquityChart = ({ data, color }) => {
         cy={H - ((data[data.length - 1] - min) / range) * H}
         r="4" fill={color}
       />
+    </svg>
+  );
+};
+
+const MultiLineChart = ({ series, height = 280 }) => {
+  if (!series || !series.length || !series[0].data) return null;
+  
+  const W = 800;
+  const H = height;
+  
+  let min = Infinity;
+  let max = -Infinity;
+  let maxLen = 0;
+  
+  series.forEach(s => {
+    if (s.data) {
+      min = Math.min(min, ...s.data);
+      max = Math.max(max, ...s.data);
+      maxLen = Math.max(maxLen, s.data.length);
+    }
+  });
+
+  if (maxLen < 2) return null;
+
+  const range = max - min || 0.01;
+  const stepX = W / (maxLen - 1);
+
+  return (
+    <svg viewBox={`0 -8 ${W} ${H + 16}`} preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: '100%', minHeight: 'unset' }}>
+      {series.map(s => {
+        if (!s.data || s.data.length < 2) return null;
+        
+        const toXY = (v, i) => {
+          const x = (i * stepX).toFixed(1);
+          const y = (H - ((v - min) / range) * (H - 8) - 4).toFixed(1);
+          return `${x},${y}`;
+        };
+
+        const pts = s.data.map(toXY).join(' ');
+        
+        return (
+          <g key={s.label}>
+            <polyline 
+              points={pts} 
+              fill="none" 
+              stroke={s.color} 
+              strokeWidth={s.bold ? "2.5" : "1.5"}
+              strokeLinejoin="round" 
+              strokeLinecap="round" 
+              vectorEffect="non-scaling-stroke" 
+              opacity={s.bold ? 1 : 0.7}
+            />
+          </g>
+        );
+      })}
     </svg>
   );
 };

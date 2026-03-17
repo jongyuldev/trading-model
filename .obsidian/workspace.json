@@ -185,6 +185,7 @@
   },
   "active": "e338604050c5680a",
   "lastOpenFiles": [
+    "webapp/dist/assets/index-rDR8oDGr.js",
     "Submission.md",
     "Submission",
     "README.md",
@@ -222,7 +223,6 @@
     "webapp/node_modules/@humanfs/node/README.md",
     "webapp/node_modules/word-wrap/README.md",
     "webapp/node_modules/p-limit/readme.md",
-    "webapp/node_modules/has-flag/readme.md",
     "webapp/src/assets/vite.svg",
     "webapp/src/assets/react.svg",
     "webapp/src/assets/hero.png",
