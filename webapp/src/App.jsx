@@ -83,42 +83,128 @@ function buildEquityCurve(finalReturn, volatility, days = 80) {
 // SVG CHART
 // ============================================================
 
-const EquityChart = ({ data, color }) => {
+// Single equity curve with area fill
+const EquityChart = ({ data, color, height = 140 }) => {
   if (!data || data.length < 2) return null;
-  const W = 400, H = 110;
+  const W = 400, H = 100;
+  const gradId = `grad-${color.replace('#', '')}`;
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 0.01;
   const stepX = W / (data.length - 1);
 
-  const pts = data.map((v, i) => {
-    const x = i * stepX;
-    const y = H - ((v - min) / range) * H;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
+  const toXY = (v, i) => {
+    const x = (i * stepX).toFixed(1);
+    const y = (H - ((v - min) / range) * (H - 8) - 4).toFixed(1);
+    return `${x},${y}`;
+  };
 
-  // Area fill
-  const first = `0,${H}`;
-  const last = `${W},${H}`;
-  const areaPath = `${first} ${pts} ${last}`;
+  const pts = data.map(toXY).join(' ');
+  const areaPath = `0,${H} ${pts} ${W},${H}`;
 
   return (
-    <svg viewBox={`0 -8 ${W} ${H + 16}`} className="chart-wrap" style={{ display: 'block', width: '100%', height: '100%' }}>
-      <defs>
-        <linearGradient id={`grad-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
-          <stop offset="100%" stopColor={color} stopOpacity="0.02" />
-        </linearGradient>
-      </defs>
-      <polygon points={areaPath} fill={`url(#grad-${color.replace('#', '')})`} />
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="2.5"
-        strokeLinejoin="round" strokeLinecap="round" />
-      <circle
-        cx={(data.length - 1) * stepX}
-        cy={H - ((data[data.length - 1] - min) / range) * H}
-        r="4" fill={color}
-      />
-    </svg>
+    <div style={{ width: '100%', height }}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+           style={{ display: 'block', width: '100%', height: '100%' }}>
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        <polygon points={areaPath} fill={`url(#${gradId})`} />
+        <polyline points={pts} fill="none" stroke={color} strokeWidth="2"
+          strokeLinejoin="round" strokeLinecap="round"
+          vectorEffect="non-scaling-stroke" />
+      </svg>
+    </div>
+  );
+};
+
+// Multi-line chart: all series on one shared axes
+const MultiLineChart = ({ series, height = 220 }) => {
+  if (!series || series.length === 0) return null;
+  const W = 500, H = 160;
+  const PAD_L = 42, PAD_R = 12, PAD_T = 10, PAD_B = 20;
+  const chartW = W - PAD_L - PAD_R;
+  const chartH = H - PAD_T - PAD_B;
+
+  // Y domain across all series
+  const allVals = series.flatMap(s => s.data);
+  const yMin = Math.min(...allVals);
+  const yMax = Math.max(...allVals);
+  const yRange = yMax - yMin || 0.01;
+
+  const toX = (i, len) => PAD_L + (i / (len - 1)) * chartW;
+  const toY = (v) => PAD_T + chartH - ((v - yMin) / yRange) * chartH;
+
+  // Y grid lines at 4 levels
+  const gridVals = [0, 1, 2, 3].map(i => yMin + (yRange * i) / 3);
+
+  return (
+    <div style={{ width: '100%', height }}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+           style={{ display: 'block', width: '100%', height: '100%' }}>
+        {/* Grid lines */}
+        {gridVals.map((v, i) => (
+          <g key={i}>
+            <line
+              x1={PAD_L} x2={W - PAD_R}
+              y1={toY(v)} y2={toY(v)}
+              stroke="#1f2937" strokeWidth="1"
+              vectorEffect="non-scaling-stroke"
+            />
+            <text
+              x={PAD_L - 4} y={toY(v)}
+              textAnchor="end" dominantBaseline="middle"
+              fontSize="9" fill="#4d5e77"
+            >
+              {v >= 1 ? ((v - 1) * 100).toFixed(0) + '%' : ''}
+            </text>
+          </g>
+        ))}
+
+        {/* Zero line (break-even) */}
+        {yMin < 1 && yMax > 1 && (
+          <line
+            x1={PAD_L} x2={W - PAD_R}
+            y1={toY(1)} y2={toY(1)}
+            stroke="#374151" strokeWidth="1" strokeDasharray="4,4"
+            vectorEffect="non-scaling-stroke"
+          />
+        )}
+
+        {/* Series lines */}
+        {series.map((s, si) => {
+          const pts = s.data.map((v, i) => `${toX(i, s.data.length).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
+          return (
+            <polyline key={si} points={pts} fill="none"
+              stroke={s.color} strokeWidth={s.bold ? 2.5 : 1.5}
+              strokeOpacity={s.bold ? 1 : 0.65}
+              strokeLinejoin="round" strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          );
+        })}
+
+        {/* X axis labels */}
+        <text x={PAD_L} y={H - 4} fontSize="9" fill="#4d5e77">Oct 2023</text>
+        <text x={W - PAD_R} y={H - 4} fontSize="9" fill="#4d5e77" textAnchor="end">Dec 2025</text>
+      </svg>
+
+      {/* Legend */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', marginTop: 8 }}>
+        {series.map((s, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{ width: 20, height: 2.5, background: s.color, borderRadius: 2, opacity: s.bold ? 1 : 0.65 }} />
+            <span style={{ fontSize: 11, color: 'var(--text-2)' }}>{s.label}</span>
+            <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: s.ret >= 0 ? 'var(--green)' : 'var(--red)' }}>
+              {s.ret >= 0 ? '+' : ''}{s.ret}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 };
 
@@ -129,6 +215,14 @@ const EquityChart = ({ data, color }) => {
 export default function App() {
   const [selectedAsset, setSelectedAsset] = useState(ASSETS[0]);
   const [activeTab, setActiveTab] = useState('live');  // 'live' | 'backtest'
+
+  // Effect to reset asset to SPY when switching to backtest
+  useEffect(() => {
+    if (activeTab === 'backtest' && selectedAsset.symbol !== 'SPY') {
+      setSelectedAsset(ASSETS[0]); // ASSETS[0] is SPY
+    }
+  }, [activeTab, selectedAsset.symbol]);
+
   const [isRunning, setIsRunning] = useState(false);
   const [results, setResults] = useState(null);
   const [curves, setCurves] = useState(null);
@@ -252,7 +346,7 @@ export default function App() {
 
             {/* ── ASSET PILLS ── */}
             <div className="asset-row">
-              {ASSETS.map(a => (
+              {ASSETS.filter(a => activeTab === 'live' || a.symbol === 'SPY').map(a => (
                 <button
                   key={a.symbol}
                   className={`asset-pill ${selectedAsset.symbol === a.symbol ? 'selected' : ''}`}
@@ -367,11 +461,11 @@ export default function App() {
                     </div>
                     {curves ? (
                       <>
-                        <div style={{ flex: 1, minHeight: 120 }}>
-                          <EquityChart data={curves.xgb} color="#4f7cff" />
-                        </div>
+                        <EquityChart data={curves.xgb} color="#4f7cff" height={180} />
                         <div className="chart-labels">
-                          <span>Oct 2023</span><span>+15.61% | MDD -5.49%</span><span>Dec 2025</span>
+                          <span>Oct 2023</span>
+                          <span style={{ color: 'var(--green)', fontWeight: 600 }}>+15.61% return</span>
+                          <span>Dec 2025</span>
                         </div>
                       </>
                     ) : (
@@ -438,22 +532,18 @@ export default function App() {
 
                   <div className="card">
                     <div className="card-header">
-                      <span className="card-title"><TrendingUp size={14} /> Simulated Equity Curves</span>
+                      <span className="card-title"><TrendingUp size={14} /> Equity Curves — All Strategies</span>
                     </div>
                     {curves ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        {[
-                          { label: 'XGBoost Meta-Learner', data: curves.xgb, color: '#4f7cff' },
-                          { label: 'Random Forest', data: curves.rf, color: '#22c55e' },
-                          { label: 'GRU Ensemble', data: curves.gru, color: '#a855f7' },
-                          { label: 'Buy & Hold SPY', data: curves.bh, color: '#8b9ab5' },
-                        ].map(c => (
-                          <div key={c.label} style={{ height: 60 }}>
-                            <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 4 }}>{c.label}</div>
-                            <EquityChart data={c.data} color={c.color} />
-                          </div>
-                        ))}
-                      </div>
+                      <MultiLineChart
+                        height={280}
+                        series={[
+                          { label: 'XGBoost Meta',   data: curves.xgb, color: '#4f7cff', bold: true,  ret: 15.61 },
+                          { label: 'Random Forest',  data: curves.rf,  color: '#22c55e', bold: false, ret: 16.14 },
+                          { label: 'GRU Ensemble',   data: curves.gru, color: '#a855f7', bold: false, ret: 15.32 },
+                          { label: 'Buy & Hold SPY', data: curves.bh,  color: '#8b9ab5', bold: false, ret: 70.08 },
+                        ]}
+                      />
                     ) : <div className="loading-box"><div className="spinner" /></div>}
                   </div>
                 </div>
