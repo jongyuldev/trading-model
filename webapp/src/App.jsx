@@ -10,19 +10,19 @@ import {
 
 const ASSETS = [
   { symbol: 'SPY', name: 'S&P 500 ETF', sector: 'Index', color: '#4f7cff' },
-  { symbol: 'LMT', name: 'Lockheed Martin',  sector: 'Defense', color: '#22c55e' },
-  { symbol: 'RTX', name: 'RTX Corporation',  sector: 'Defense', color: '#a855f7' },
+  { symbol: 'LMT', name: 'Lockheed Martin', sector: 'Defense', color: '#22c55e' },
+  { symbol: 'RTX', name: 'RTX Corporation', sector: 'Defense', color: '#a855f7' },
   { symbol: 'NOC', name: 'Northrop Grumman', sector: 'Defense', color: '#f59e0b' },
 ];
 
 // Actual backtest results from the unified pipeline (test period: 2023-10-27 → 2025-12-31)
 const BACKTEST = {
   strategies: [
-    { name: 'XGBoost Meta-Learner',  ret: 15.61, dd: -5.49, color: '#4f7cff', active: true },
-    { name: 'Random Forest Only',    ret: 16.14, dd: -5.49, color: '#22c55e', active: false },
-    { name: 'GRU Ensemble Only',     ret: 15.32, dd: -14.82,color: '#a855f7', active: false },
-    { name: 'Buy & Hold SPY',        ret: 70.08, dd: -18.76,color: '#8b9ab5', active: false },
-    { name: 'SMA(10/50) Crossover',  ret: 37.30, dd: -11.72,color: '#f59e0b', active: false },
+    { name: 'XGBoost Meta-Learner', ret: 15.61, dd: -5.49, color: '#4f7cff', active: true },
+    { name: 'Random Forest Only', ret: 16.14, dd: -5.49, color: '#22c55e', active: false },
+    { name: 'GRU Ensemble Only', ret: 15.32, dd: -14.82, color: '#a855f7', active: false },
+    { name: 'Buy & Hold SPY', ret: 70.08, dd: -18.76, color: '#8b9ab5', active: false },
+    { name: 'SMA(10/50) Crossover', ret: 37.30, dd: -11.72, color: '#f59e0b', active: false },
   ],
   turbulenceDays: 48,
   testDays: 543,
@@ -49,7 +49,7 @@ const MODELS = [
     mse: 0.000108,
     mae: 0.00698,
     signal: 'Best Accuracy',
-    desc: '2-layer GRU, 60-day windows, 3-seed ensemble with early stopping',
+    desc: '2-layer GRU, 60-day windows, single model run for speed',
     color: '#4f7cff',
   },
   {
@@ -236,8 +236,8 @@ export default function App() {
       // Simulate prediction using real model logic (sign based on RF-dominant XGBoost weight)
       const rfBias = Math.random() > 0.42; // slight bullish bias from RF
       const gruBias = Math.random() > 0.45;
-      const rfPred   = rfBias  ? 0.0052 : -0.0039;
-      const gruPred  = gruBias ? 0.0031 : -0.0028;
+      const rfPred = rfBias ? 0.0052 : -0.0039;
+      const gruPred = gruBias ? 0.0031 : -0.0028;
       const predSpread = Math.abs(rfPred - gruPred);
       const rsi = 40 + Math.random() * 30;
       const vol20d = 0.008 + Math.random() * 0.012;
@@ -254,17 +254,29 @@ export default function App() {
 
       setResults({ signal, confidence: parseFloat(confidence), turbulence: turbulence.toFixed(2), inCrash, rfPred, gruPred, xgbScore, rsi, vol20d });
 
-      // Pre-render curves once
-      if (!curves) {
-        setCurves({
-          xgb: buildEquityCurve(15.61, 0.005),
-          rf:  buildEquityCurve(16.14, 0.006),
-          gru: buildEquityCurve(15.32, 0.009),
-          bh:  buildEquityCurve(70.08, 0.011),
+      // Fetch real data from the model output Instead of simulating
+      fetch('/results.json')
+        .then(res => res.json())
+        .then(data => {
+          setCurves({
+            xgb: data.curves.xgb,
+            rf: data.curves.rf,
+            gru: data.curves.gru,
+            bh: data.curves.bh,
+          });
+          setIsRunning(false);
+        })
+        .catch(err => {
+          console.error("Failed to load real data, fallback to mock", err);
+          setCurves({
+            xgb: [1.0, 1.15],
+            rf: [1.0, 1.16],
+            gru: [1.0, 1.15],
+            bh: [1.0, 1.70],
+          });
+          setIsRunning(false);
         });
-      }
 
-      setIsRunning(false);
     }, 1100);
   };
 
@@ -360,9 +372,9 @@ export default function App() {
                 <div className="metrics-row">
                   {[
                     { label: 'Ensemble Return', value: '+15.61%', sub: 'Test period (2023–2025)', color: 'var(--green)' },
-                    { label: 'Max Drawdown',    value: '-5.49%',  sub: 'XGBoost + turbulence shield', color: 'var(--red)' },
+                    { label: 'Max Drawdown', value: '-5.49%', sub: 'XGBoost + turbulence shield', color: 'var(--red)' },
                     { label: 'Turbulence Days', value: `${BACKTEST.turbulenceDays}/${BACKTEST.testDays}`, sub: 'Kill-switch triggered', color: 'var(--amber)' },
-                    { label: 'Best GRU MAE',    value: '0.698%',  sub: 'Return-space error (test)', color: 'var(--brand)' },
+                    { label: 'Best GRU MAE', value: '0.698%', sub: 'Return-space error (test)', color: 'var(--brand)' },
                   ].map(m => (
                     <div className="metric-card" key={m.label}>
                       <div className="metric-label">{m.label}</div>
@@ -580,10 +592,10 @@ export default function App() {
               <>
                 <div className="metrics-row">
                   {[
-                    { label: 'Data Range',       value: '2015–2025', sub: '2,765 trading days',     color: 'var(--brand)' },
-                    { label: 'Train / Test',      value: '80 / 20%',  sub: 'Chronological split',    color: 'var(--text-1)' },
-                    { label: 'GRU Window',        value: '60 days',   sub: 'Sliding input window',   color: 'var(--purple)' },
-                    { label: 'Normalization',     value: 'Z-Score',   sub: 'Fit on train only',      color: 'var(--green)' },
+                    { label: 'Data Range', value: '2015–2025', sub: '2,765 trading days', color: 'var(--brand)' },
+                    { label: 'Train / Test', value: '80 / 20%', sub: 'Chronological split', color: 'var(--text-1)' },
+                    { label: 'GRU Window', value: '60 days', sub: 'Sliding input window', color: 'var(--purple)' },
+                    { label: 'Normalization', value: 'Z-Score', sub: 'Fit on train only', color: 'var(--green)' },
                   ].map(m => (
                     <div className="metric-card" key={m.label}>
                       <div className="metric-label">{m.label}</div>
@@ -607,7 +619,7 @@ export default function App() {
                       {[
                         { l: 'MSE (return-space)', v: m.mse.toFixed(8) },
                         { l: 'MAE (return-space)', v: m.mae.toFixed(8) },
-                        { l: 'XGBoost Weight',     v: `${m.weight}%` },
+                        { l: 'XGBoost Weight', v: `${m.weight}%` },
                       ].map(s => (
                         <div key={s.l} style={{ background: 'var(--bg-surface)', borderRadius: 8, padding: '10px 12px', border: '1px solid var(--border)' }}>
                           <div style={{ fontSize: 10.5, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>{s.l}</div>

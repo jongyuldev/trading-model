@@ -53,7 +53,6 @@ GRU_DROPOUT = 0.2
 GRU_WEIGHT_DECAY = 1e-4
 GRU_HIDDEN_1 = 64
 GRU_HIDDEN_2 = 32
-GRU_TRIAL_SEEDS = [7, 21, 42]
 
 
 # ============================================================================
@@ -368,19 +367,14 @@ def run_gru_ensemble(train_scaled: pd.DataFrame, test_scaled: pd.DataFrame,
     te_loader = DataLoader(TensorDataset(x_te_t, y_te_t),
                            batch_size=GRU_BATCH_SIZE, shuffle=False, pin_memory=pin)
 
-    # Multi-seed ensemble
-    all_tr_preds, all_te_preds = [], []
-    for seed in GRU_TRIAL_SEEDS:
-        print(f"\n[GRU] --- Seed {seed} ---")
-        set_seed(seed)
-        model = GRUNeuralNetwork(input_size=x_tr.shape[2]).to(device)
-        model = _train_gru(model, tr_loader, te_loader, device)
-        all_tr_preds.append(_predict_gru(model, x_tr_t, device))
-        all_te_preds.append(_predict_gru(model, x_te_t, device))
+    # Run once without ensemble loop for speed
+    print(f"\n[GRU] Training single model (seed {RANDOM_STATE})...")
+    set_seed(RANDOM_STATE)
+    model = GRUNeuralNetwork(input_size=x_tr.shape[2]).to(device)
+    model = _train_gru(model, tr_loader, te_loader, device)
 
-    # Average across seeds
-    gru_train_returns = np.mean(np.vstack(all_tr_preds), axis=0)
-    gru_test_returns = np.mean(np.vstack(all_te_preds), axis=0)
+    gru_train_returns = _predict_gru(model, x_tr_t, device)
+    gru_test_returns = _predict_gru(model, x_te_t, device)
 
     # Pad to match tabular row count (GRU needs WINDOW_SIZE lead-in rows)
     pad_train = len(train_scaled) - len(gru_train_returns)
@@ -388,7 +382,7 @@ def run_gru_ensemble(train_scaled: pd.DataFrame, test_scaled: pd.DataFrame,
     gru_train_full = np.concatenate([np.zeros(pad_train), gru_train_returns])
     gru_test_full = np.concatenate([np.zeros(pad_test), gru_test_returns])
 
-    print(f"\n[GRU] Ensemble done ({len(GRU_TRIAL_SEEDS)} seeds). "
+    print(f"\n[GRU] Model trained. "
           f"Train preds: {len(gru_train_full)}, Test preds: {len(gru_test_full)}")
     return model, gru_train_full, gru_test_full
 
@@ -659,6 +653,30 @@ def main():
         mse = mean_squared_error(y_test, preds)
         mae = mean_absolute_error(y_test, preds)
         print(f"  {name:20s}  MSE={mse:.8f}  MAE={mae:.8f}")
+
+    # --- Save real results for webapp ---
+    import json
+    import os
+    webapp_data = {
+        "curves": {
+            "xgb": xgb_portfolio.tolist(),
+            "rf": rf_portfolio.tolist(),
+            "gru": gru_portfolio.tolist(),
+            "bh": bh_portfolio.tolist(),
+            "sma": sma_portfolio.tolist()
+        },
+        "metrics": {
+            "test_days": len(meta_test),
+            "turbulence_triggered": int(np.sum(test_turb > np.percentile(train_turb, TURBULENCE_PERCENTILE)))
+        },
+        "importance": {k: float(v) for k, v in zip(meta_train.columns, xgb_model.feature_importances_)}
+    }
+    
+    out_path = os.path.join(os.path.dirname(__file__), "webapp", "public", "results.json")
+    if os.path.exists(os.path.dirname(out_path)):
+        with open(out_path, "w") as f:
+            json.dump(webapp_data, f)
+        print(f"\n[Webapp] Exported results to {out_path}")
 
     print("\n" + "=" * 70)
     print("  DONE — All three models integrated successfully!")
