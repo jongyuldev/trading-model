@@ -665,7 +665,7 @@ def main():
         },
         "metrics": {
             "test_days": len(meta_test),
-            "turbulence_triggered": int(np.sum(test_turb > np.percentile(train_turb, TURBULENCE_PERCENTILE)))
+            "turbulence_triggered": turb_days
         },
         "importance": {k: float(v) for k, v in zip(meta_train.columns, xgb_model.feature_importances_)}
     }

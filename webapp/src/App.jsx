@@ -18,9 +18,9 @@ const ASSETS = [
 // Actual backtest results from the unified pipeline (test period: 2023-10-27 → 2025-12-31)
 const BACKTEST = {
   strategies: [
-    { name: 'XGBoost Meta-Learner', ret: 15.61, dd: -5.49, color: '#4f7cff', active: true },
-    { name: 'Random Forest Only', ret: 16.14, dd: -5.49, color: '#22c55e', active: false },
-    { name: 'GRU Ensemble Only', ret: 15.32, dd: -14.82, color: '#a855f7', active: false },
+    { name: 'XGBoost Meta-Learner', ret: 18.29, dd: -4.73, color: '#4f7cff', active: true },
+    { name: 'Random Forest Only', ret: 19.87, dd: -3.99, color: '#22c55e', active: false },
+    { name: 'GRU Ensemble Only', ret: 18.14, dd: -19.89, color: '#a855f7', active: false },
     { name: 'Buy & Hold SPY', ret: 70.08, dd: -18.76, color: '#8b9ab5', active: false },
     { name: 'SMA(10/50) Crossover', ret: 37.30, dd: -11.72, color: '#f59e0b', active: false },
   ],
@@ -35,9 +35,9 @@ const MODELS = [
   {
     name: 'Random Forest',
     role: 'Member 1 — Classical Baseline',
-    weight: 71,  // feature importance from XGBoost
-    mse: 0.000167,
-    mae: 0.00984,
+    weight: 73,  // feature importance from XGBoost
+    mse: 0.000169,
+    mae: 0.00994,
     signal: 'Stable',
     desc: '100 decision trees on tabular OHLCV + SMA/RSI/MACD features',
     color: '#22c55e',
@@ -46,8 +46,8 @@ const MODELS = [
     name: 'GRU Ensemble',
     role: 'Member 2 — Deep Learning',
     weight: 2,   // feature importance from XGBoost
-    mse: 0.000108,
-    mae: 0.00698,
+    mse: 0.000111,
+    mae: 0.00699,
     signal: 'Best Accuracy',
     desc: '2-layer GRU, 60-day windows, single model run for speed',
     color: '#4f7cff',
@@ -56,8 +56,8 @@ const MODELS = [
     name: 'XGBoost Meta',
     role: 'Member 3 — Ensembler',
     weight: 100, // meta-learner itself
-    mse: 0.000230,
-    mae: 0.01195,
+    mse: 0.000255,
+    mae: 0.01279,
     signal: 'Risk-Adjusted',
     desc: 'Learns which base model to trust under stable vs volatile markets',
     color: '#a855f7',
@@ -83,9 +83,14 @@ function buildEquityCurve(finalReturn, volatility, days = 80) {
 // SVG CHART
 // ============================================================
 
+const toCumulative = (rets) => {
+  let val = 1.0;
+  return [1.0, ...rets.map(r => { val *= (1 + r); return val; })];
+};
+
 const EquityChart = ({ data, color }) => {
   if (!data || data.length < 2) return null;
-  const W = 400, H = 110;
+  const W = 800, H = 100;
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 0.01;
@@ -103,7 +108,7 @@ const EquityChart = ({ data, color }) => {
   const areaPath = `${first} ${pts} ${last}`;
 
   return (
-    <svg viewBox={`0 -8 ${W} ${H + 16}`} className="chart-wrap" style={{ display: 'block', width: '100%', height: '100%' }}>
+    <svg viewBox={`0 -8 ${W} ${H + 16}`} preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: '100%', minHeight: 'unset' }}>
       <defs>
         <linearGradient id={`grad-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.25" />
@@ -112,7 +117,7 @@ const EquityChart = ({ data, color }) => {
       </defs>
       <polygon points={areaPath} fill={`url(#grad-${color.replace('#', '')})`} />
       <polyline points={pts} fill="none" stroke={color} strokeWidth="2.5"
-        strokeLinejoin="round" strokeLinecap="round" />
+        strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
       <circle
         cx={(data.length - 1) * stepX}
         cy={H - ((data[data.length - 1] - min) / range) * H}
@@ -148,8 +153,8 @@ export default function App() {
       const rsi = 40 + Math.random() * 30;
       const vol20d = 0.008 + Math.random() * 0.012;
 
-      // XGBoost weighting (matches real feature importances: rf_pred=0.71, spread=0.16)
-      const xgbScore = rfPred * 0.71 + gruPred * 0.02 + predSpread * 0.16 + (rsi - 50) * 0.0003 - vol20d * 0.5;
+      // XGBoost weighting (matches real feature importances: rf_pred=0.73, spread=0.14)
+      const xgbScore = rfPred * 0.73 + gruPred * 0.02 + predSpread * 0.14 + (rsi - 50) * 0.0003 - vol20d * 0.5;
 
       const isBullish = xgbScore > 0;
       const turbulence = Math.random() * 12;
@@ -165,10 +170,10 @@ export default function App() {
         .then(res => res.json())
         .then(data => {
           setCurves({
-            xgb: data.curves.xgb,
-            rf: data.curves.rf,
-            gru: data.curves.gru,
-            bh: data.curves.bh,
+            xgb: toCumulative(data.curves.xgb),
+            rf: toCumulative(data.curves.rf),
+            gru: toCumulative(data.curves.gru),
+            bh: toCumulative(data.curves.bh),
           });
           setIsRunning(false);
         })
@@ -205,7 +210,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="sidebar-logo">
           <Zap size={22} />
-          <span className="sidebar-logo-text">Defense<span>AI</span></span>
+          <span className="sidebar-logo-text">Trading<span>Ensemble</span></span>
         </div>
         <nav className="sidebar-nav">
           <button className={`nav-item ${activeTab === 'live' ? 'active' : ''}`} onClick={() => setActiveTab('live')}>
