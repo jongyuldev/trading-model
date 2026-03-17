@@ -185,6 +185,7 @@
   },
   "active": "e338604050c5680a",
   "lastOpenFiles": [
+    "ui.jsx",
     "yf_tz_cache/tkr-tz.db",
     "yf_tz_cache/cookies.db",
     "yf_tz_cache",
@@ -195,7 +196,6 @@
     "gru_model.pth",
     "evaluation.py",
     "data_pipeline.py",
-    "__pycache__/random_forest_model.cpython-312.pyc",
     "equity_curves.png",
     "trading_model_results.png",
     "Information.md"
