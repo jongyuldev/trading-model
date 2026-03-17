@@ -215,6 +215,14 @@ const MultiLineChart = ({ series, height = 220 }) => {
 export default function App() {
   const [selectedAsset, setSelectedAsset] = useState(ASSETS[0]);
   const [activeTab, setActiveTab] = useState('live');  // 'live' | 'backtest'
+
+  // Effect to reset asset to SPY when switching to backtest
+  useEffect(() => {
+    if (activeTab === 'backtest' && selectedAsset.symbol !== 'SPY') {
+      setSelectedAsset(ASSETS[0]); // ASSETS[0] is SPY
+    }
+  }, [activeTab, selectedAsset.symbol]);
+
   const [isRunning, setIsRunning] = useState(false);
   const [results, setResults] = useState(null);
   const [curves, setCurves] = useState(null);
@@ -326,7 +334,7 @@ export default function App() {
 
             {/* ── ASSET PILLS ── */}
             <div className="asset-row">
-              {ASSETS.map(a => (
+              {ASSETS.filter(a => activeTab === 'live' || a.symbol === 'SPY').map(a => (
                 <button
                   key={a.symbol}
                   className={`asset-pill ${selectedAsset.symbol === a.symbol ? 'selected' : ''}`}

@@ -12,6 +12,8 @@ Run:  python main.py
 
 import warnings
 import random
+import json
+import joblib
 
 import numpy as np
 import pandas as pd
@@ -218,7 +220,7 @@ def run_random_forest(train_df: pd.DataFrame, test_df: pd.DataFrame,
     train_preds = rf.predict(train_df[feature_cols])
     test_preds = rf.predict(test_df[feature_cols])
     print(f"[RF] {len(train_preds)} train + {len(test_preds)} test predictions.")
-    return train_preds, test_preds
+    return rf, train_preds, test_preds
 
 
 # ============================================================================
@@ -388,7 +390,7 @@ def run_gru_ensemble(train_scaled: pd.DataFrame, test_scaled: pd.DataFrame,
 
     print(f"\n[GRU] Ensemble done ({len(GRU_TRIAL_SEEDS)} seeds). "
           f"Train preds: {len(gru_train_full)}, Test preds: {len(gru_test_full)}")
-    return gru_train_full, gru_test_full
+    return model, gru_train_full, gru_test_full
 
 
 # ============================================================================
@@ -564,7 +566,7 @@ def main():
     # ==================================================================
     print("\n>>> HOUR 3A: Random Forest (Member 1)\n")
 
-    rf_train_preds, rf_test_preds = run_random_forest(
+    rf_model, rf_train_preds, rf_test_preds = run_random_forest(
         train_df, test_df, feature_cols, "target_return")
 
     # ==================================================================
@@ -573,7 +575,7 @@ def main():
     print("\n>>> HOUR 3B: GRU Ensemble (Member 2)\n")
 
     # GRU uses the normalized features but needs raw close for return targets
-    gru_train_preds, gru_test_preds = run_gru_ensemble(
+    gru_model, gru_train_preds, gru_test_preds = run_gru_ensemble(
         train_df[feature_cols], test_df[feature_cols],
         train_raw_close, test_raw_close, device)
 
@@ -661,6 +663,31 @@ def main():
     print("\n" + "=" * 70)
     print("  DONE — All three models integrated successfully!")
     print("=" * 70)
+
+    # ------------------------------------------------------------------
+    # SAVE MODELS — for server.py live inference
+    # ------------------------------------------------------------------
+    print("\n[Save] Saving models and metadata to disk ...")
+    joblib.dump(rf_model, "rf_model.pkl")
+    joblib.dump(xgb_model, "xgb_model.pkl")
+    joblib.dump(scaler, "scaler.pkl")
+
+    # Save the last GRU model (seed 42) — reuse the in-memory object
+    torch.save(gru_model.state_dict(), "gru_model.pth")
+
+    # Save metadata needed for inference
+    meta = {
+        "feature_cols": feature_cols,
+        "turb_threshold": turb_threshold,
+        "gru_input_size": len(feature_cols),
+        "train_cutoff": str(train_df.index[-1].date()),
+    }
+    with open("model_metadata.json", "w") as f:
+        json.dump(meta, f, indent=2)
+
+    print("[Save] rf_model.pkl, xgb_model.pkl, scaler.pkl, gru_model.pth, model_metadata.json")
+    print("[Save] Run  python server.py  to start the API for the webapp.\n")
+
 
 
 if __name__ == "__main__":
