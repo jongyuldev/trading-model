@@ -96,16 +96,14 @@ const EquityChart = ({ data, color }) => {
   const range = max - min || 0.01;
   const stepX = W / (data.length - 1);
 
-  const pts = data.map((v, i) => {
-    const x = i * stepX;
-    const y = H - ((v - min) / range) * H;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
+  const toXY = (v, i) => {
+    const x = (i * stepX).toFixed(1);
+    const y = (H - ((v - min) / range) * (H - 8) - 4).toFixed(1);
+    return `${x},${y}`;
+  };
 
-  // Area fill
-  const first = `0,${H}`;
-  const last = `${W},${H}`;
-  const areaPath = `${first} ${pts} ${last}`;
+  const pts = data.map(toXY).join(' ');
+  const areaPath = `0,${H} ${pts} ${W},${H}`;
 
   return (
     <svg viewBox={`0 -8 ${W} ${H + 16}`} preserveAspectRatio="none" style={{ display: 'block', width: '100%', height: '100%', minHeight: 'unset' }}>
@@ -134,6 +132,14 @@ const EquityChart = ({ data, color }) => {
 export default function App() {
   const [selectedAsset, setSelectedAsset] = useState(ASSETS[0]);
   const [activeTab, setActiveTab] = useState('live');  // 'live' | 'backtest'
+
+  // Effect to reset asset to SPY when switching to backtest
+  useEffect(() => {
+    if (activeTab === 'backtest' && selectedAsset.symbol !== 'SPY') {
+      setSelectedAsset(ASSETS[0]); // ASSETS[0] is SPY
+    }
+  }, [activeTab, selectedAsset.symbol]);
+
   const [isRunning, setIsRunning] = useState(false);
   const [results, setResults] = useState(null);
   const [curves, setCurves] = useState(null);
@@ -257,7 +263,7 @@ export default function App() {
 
             {/* ── ASSET PILLS ── */}
             <div className="asset-row">
-              {ASSETS.map(a => (
+              {ASSETS.filter(a => activeTab === 'live' || a.symbol === 'SPY').map(a => (
                 <button
                   key={a.symbol}
                   className={`asset-pill ${selectedAsset.symbol === a.symbol ? 'selected' : ''}`}
@@ -372,11 +378,11 @@ export default function App() {
                     </div>
                     {curves ? (
                       <>
-                        <div style={{ flex: 1, minHeight: 120 }}>
-                          <EquityChart data={curves.xgb} color="#4f7cff" />
-                        </div>
+                        <EquityChart data={curves.xgb} color="#4f7cff" height={180} />
                         <div className="chart-labels">
-                          <span>Oct 2023</span><span>+15.61% | MDD -5.49%</span><span>Dec 2025</span>
+                          <span>Oct 2023</span>
+                          <span style={{ color: 'var(--green)', fontWeight: 600 }}>+15.61% return</span>
+                          <span>Dec 2025</span>
                         </div>
                       </>
                     ) : (
@@ -443,22 +449,18 @@ export default function App() {
 
                   <div className="card">
                     <div className="card-header">
-                      <span className="card-title"><TrendingUp size={14} /> Simulated Equity Curves</span>
+                      <span className="card-title"><TrendingUp size={14} /> Equity Curves — All Strategies</span>
                     </div>
                     {curves ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        {[
-                          { label: 'XGBoost Meta-Learner', data: curves.xgb, color: '#4f7cff' },
-                          { label: 'Random Forest', data: curves.rf, color: '#22c55e' },
-                          { label: 'GRU Ensemble', data: curves.gru, color: '#a855f7' },
-                          { label: 'Buy & Hold SPY', data: curves.bh, color: '#8b9ab5' },
-                        ].map(c => (
-                          <div key={c.label} style={{ height: 60 }}>
-                            <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 4 }}>{c.label}</div>
-                            <EquityChart data={c.data} color={c.color} />
-                          </div>
-                        ))}
-                      </div>
+                      <MultiLineChart
+                        height={280}
+                        series={[
+                          { label: 'XGBoost Meta',   data: curves.xgb, color: '#4f7cff', bold: true,  ret: 15.61 },
+                          { label: 'Random Forest',  data: curves.rf,  color: '#22c55e', bold: false, ret: 16.14 },
+                          { label: 'GRU Ensemble',   data: curves.gru, color: '#a855f7', bold: false, ret: 15.32 },
+                          { label: 'Buy & Hold SPY', data: curves.bh,  color: '#8b9ab5', bold: false, ret: 70.08 },
+                        ]}
+                      />
                     ) : <div className="loading-box"><div className="spinner" /></div>}
                   </div>
                 </div>
