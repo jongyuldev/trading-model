@@ -51,3 +51,37 @@ Once Team Member 3 (your meta-learner) calculates this daily turbulence score, y
 **1. Set a Threshold:** You define a specific turbulence threshold. If you want a highly risk-averse strategy, you set this threshold lower. **2. The Trigger (Market Crash Mode):** If the calculated Turbulencet​ spikes above your threshold, the system flags extreme market conditions. Your algorithm must immediately **halt all buying and sell off all held shares** to liquidate your portfolio into safe cash. **3. The Recovery (Resume Trading):** Your algorithm continues to monitor the market daily but keeps your capital in cash. It only resumes normal trading (listening to the XGBoost, Random Forest, and GRU predictions) once the turbulence index drops back below your safe threshold.
 
 In historical backtests, incorporating this exact turbulence index allowed algorithms to cut catastrophic losses and successfully survive major market crashes, such as the March 2020 COVID-19 crash.
+
+---
+
+**Hour 1: Data Pipeline & Feature Engineering (Team Effort)**
+
+During the first hour, you must establish a perfectly clean data pipeline. If this is flawed, all three models will fail.
+
+- **Data Acquisition:** Use `yfinance` to fetch daily Open-High-Low-Close-Volume (OHLCV) adjusted data for SPY and your chosen defense stocks (e.g., LMT, RTX, NOC). Handle any missing values using forward-filling.
+- **Feature Engineering:** Calculate technical indicators to capture market momentum and trends. Specifically, compute a **50-day Simple Moving Average (SMA)**, a **14-day Relative Strength Index (RSI)**, and **MACD (12,26,9)**. **Crucial Rule:** You must calculate these using _trailing_ rolling windows that end at day t to completely prevent look-ahead bias.
+- **Data Splitting:** Split your dataset chronologically (e.g., 80% training, 20% testing). You must use strict temporal ordering and **absolutely no random shuffling**, as this will destroy the time-series integrity.
+- **Z-Score Normalization:** Apply `StandardScaler` to normalize your data. To prevent data leakage, fit the scaler **only** on the training data, and then apply it to both the training and testing sets.
+
+**Hour 2: Base Model Development (Parallel Work)**
+
+With the data prepped, Members 1 and 2 start building their individual models while Member 3 sets up the risk governance.
+
+- **Member 1 (Random Forest):** Build a Random Forest regressor with 100 decision tree estimators. Train it on the tabular features to predict the next day's price. Because it trains in seconds, use this time to help debug Member 2's data shape if needed.
+- **Member 2 (GRU Model):** Format the training data into 3D tensors using a 60-day sliding window. Build a 2-layer GRU (e.g., 100 units in the first layer, 50 units in the second layer) with a 0.2 dropout rate to prevent overfitting. Compile with the Adam optimizer and Mean Squared Error (MSE) loss, and set up an Early Stopping callback so the model stops training as soon as validation loss plateaus.
+- **Member 3 (Turbulence Index):** Write a Python script to calculate the daily turbulence index using the historical covariance matrix of your stock basket. Set a hard threshold: if turbulence spikes above this limit, the system should output a signal to liquidate all holdings to cash.
+
+**Hour 3: The XGBoost Meta-Learner & Ensembling**
+
+Now, the team merges their work.
+
+- **Generate Base Predictions:** Members 1 and 2 must output their models' next-day price predictions for the _entire_ training and validation sets.
+- **Build the Meta-Learner (Member 3):** Take the predicted prices from the Random Forest and the GRU, along with recent volatility metrics, and concatenate them into a new dataset. Train the **XGBoost** model on this new dataset. XGBoost will learn which model to trust more under specific market conditions (e.g., trusting the RF on stable days and the GRU on volatile days).
+
+**Hour 4: Trading Simulation, Evaluation, & Polish**
+
+In the final hour, translate your predictions into a measurable trading strategy.
+
+- **Trading Logic:** Implement a simple rule-based execution script. For example, if the XGBoost meta-learner forecasts a positive return (>0) for the next day, allocate 100% to a long position; if negative, hold cash. Make sure your Turbulence Index overrides this and forces a cash position if the market is crashing.
+- **Benchmarking:** To prove your model is actually good, compare its returns against a simple "Buy and Hold" strategy on SPY, and a basic SMA(10)/SMA(50) crossover strategy.
+- **Calculate Metrics:** Generate your final performance metrics for the judges. Use **Mean Squared Error (MSE)**, **Root Mean Squared Error (RMSE)**, and **Mean Absolute Error (MAE)** for prediction accuracy. Also, present your simulated portfolio return and maximum drawdown to prove profitability and risk management.
