@@ -185,6 +185,7 @@
   },
   "active": "e338604050c5680a",
   "lastOpenFiles": [
+    "README.md",
     "webapp/dist/assets/index-CogNuJYz.js",
     "webapp/dist/index.html",
     "webapp/dist/assets/index-DN3Jrb4g.css",
@@ -198,7 +199,6 @@
     "webapp/dist/results.json",
     "webapp/dist/icons.svg",
     "webapp/dist/favicon.svg",
-    "webapp/dist",
     "webapp/node_modules/picocolors/README.md",
     "webapp/node_modules/vite/LICENSE.md",
     "webapp/node_modules/react/README.md",
